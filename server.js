@@ -18,7 +18,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Service Account Credentials (lade lokal, nicht in Git pushen!)
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const serviceAccount = require('./service-account.json');
+if (!process.env.GOOGLE_CREDENTIALS) {
+  throw new Error('GOOGLE_CREDENTIALS nicht gesetzt!');
+}
+const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const calendarId = 'primary'; // Oder deine Kalender-ID hier
