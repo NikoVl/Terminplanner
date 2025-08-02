@@ -2,102 +2,112 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Terminübersicht – Google Kalender</title>
+  <title>Terminbuchung</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 2rem;
-      background: #f9f9f9;
-      color: #333;
-    }
-    #busy-times {
-      margin-top: 1rem;
-      background: white;
-      padding: 1rem;
+    body { font-family: Arial; background: #f4f4f4; padding: 2rem; }
+    h1 { color: #333; }
+    #slots { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .slot-button {
+      padding: 10px 15px;
+      background: #007acc;
+      color: white;
+      border: none;
       border-radius: 6px;
-      box-shadow: 0 0 8px rgba(0,0,0,0.1);
-    }
-    .busy-slot {
-      border-bottom: 1px solid #ccc;
-      padding: 0.4rem 0;
+      cursor: pointer;
     }
   </style>
   <script src="https://apis.google.com/js/api.js"></script>
 </head>
 <body>
 
-  <h1>Terminübersicht</h1>
-  <p>Hier sehen Sie, wann Termine bereits vergeben sind.</p>
+<h1>Termin buchen (nächste 6 Monate)</h1>
+<p>Wähle einen freien 1-Stunden-Slot für dein Gespräch:</p>
+<div id="slots">Lade freie Termine...</div>
 
-  <div id="busy-times">
-    <h2>Belegte Zeiten (nächste 7 Tage)</h2>
-    <div id="slots">Lade Daten...</div>
-  </div>
+<script>    
+  const calendarId = 'pedinovl97@gmail.com'; // <- richtige ID eintragen
+  const API_KEY = 'AIzaSyA22vp3yXmWm4AS1o8sMwpLfhAn-SF8pDU'; // <- dein API Key
+  const WORKING_HOURS = { start: 8, end: 18 }; // 8–18 Uhr
 
-  <script>
-    // ✅ Deine Kalender-ID (nicht die URL!)
-    const calendarId = 'pedinovl97@gmail.com'; // <- richtige ID eintragen
-    const API_KEY = 'AIzaSyA22vp3yXmWm4AS1o8sMwpLfhAn-SF8pDU'; // <- dein API Key
+  function loadGAPI() {
+    gapi.load('client', () => {
+      gapi.client.init({ apiKey: API_KEY }).then(listFreeSlots);
+    });
+  }
 
-    function start() {
-      gapi.client.init({
-        apiKey: API_KEY,
-        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"]
-      }).then(listBusyTimes).catch(err => {
-        document.getElementById('slots').innerText = 'Fehler: ' + err.message;
-        console.error(err);
-      });
+  function listFreeSlots() {
+    const now = new Date();
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + 6);
+
+    gapi.client.calendar.freebusy.query({
+      resource: {
+        timeMin: now.toISOString(),
+        timeMax: endDate.toISOString(),
+        timeZone: 'Europe/Berlin',
+        items: [{ id: CALENDAR_ID }]
+      }
+    }).then(res => {
+      const busySlots = res.result.calendars[CALENDAR_ID].busy.map(b => ({
+        start: new Date(b.start),
+        end: new Date(b.end)
+      }));
+
+      const freeSlots = findFreeSlots(now, endDate, busySlots);
+      renderSlots(freeSlots);
+    }).catch(err => {
+      document.getElementById('slots').innerText = 'Fehler beim Laden: ' + err.message;
+      console.error(err);
+    });
+  }
+
+  function findFreeSlots(startDate, endDate, busy) {
+    const free = [];
+    const current = new Date(startDate);
+
+    while (current < endDate) {
+      const day = current.getDay();
+      if (day > 0 && day < 6) { // Montag bis Freitag
+        for (let hour = WORKING_HOURS.start; hour < WORKING_HOURS.end; hour++) {
+          const slotStart = new Date(current.setHours(hour, 0, 0, 0));
+          const slotEnd = new Date(current.setHours(hour + 1, 0, 0, 0));
+
+          const overlaps = busy.some(b =>
+            (slotStart < b.end && slotEnd > b.start)
+          );
+
+          if (!overlaps && slotStart > new Date()) {
+            free.push(new Date(slotStart));
+          }
+        }
+      }
+      current.setDate(current.getDate() + 1);
+      current.setHours(0, 0, 0, 0);
     }
 
-    function listBusyTimes() {
-      const now = new Date();
-      const timeMin = now.toISOString();
-      const timeMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    return free;
+  }
 
-      gapi.client.calendar.freebusy.query({
-        resource: {
-          timeMin: timeMin,
-          timeMax: timeMax,
-          timeZone: 'Europe/Berlin',
-          items: [{ id: calendarId }]
-        }
-      }).then(response => {
-        const slotsDiv = document.getElementById('slots');
-        slotsDiv.innerHTML = '';
+  function renderSlots(slots) {
+    const container = document.getElementById('slots');
+    container.innerHTML = '';
 
-        const calendar = response.result.calendars[calendarId];
-        if (!calendar || !calendar.busy) {
-          slotsDiv.innerText = 'Keine Belegungen gefunden.';
-          return;
-        }
-
-        const busy = calendar.busy;
-
-        if (busy.length === 0) {
-          slotsDiv.innerText = 'Der Kalender ist in den nächsten 7 Tagen frei.';
-        } else {
-          busy.forEach(slot => {
-            const start = new Date(slot.start);
-            const end = new Date(slot.end);
-            const div = document.createElement('div');
-            div.className = 'busy-slot';
-            div.textContent = `Von ${start.toLocaleString()} bis ${end.toLocaleString()}`;
-            slotsDiv.appendChild(div);
-          });
-        }
-      }).catch(err => {
-        document.getElementById('slots').innerText = 'Fehler beim Abrufen: ' + err.message;
-        console.error(err);
-      });
+    if (slots.length === 0) {
+      container.innerText = 'Keine freien Termine gefunden.';
+      return;
     }
 
-    function loadGAPI() {
-      gapi.load('client', start);
-    }
+    slots.forEach(slot => {
+      const btn = document.createElement('button');
+      btn.className = 'slot-button';
+      btn.innerText = slot.toLocaleString('de-DE');
+      btn.onclick = () => alert(`Du hast ${slot.toLocaleString('de-DE')} ausgewählt`);
+      container.appendChild(btn);
+    });
+  }
 
-    window.onload = loadGAPI;
-  </script>
+  window.onload = loadGAPI;
+</script>
 
 </body>
 </html>
