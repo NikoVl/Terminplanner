@@ -3,25 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Terminplaner mit Google Kalender Integration</title>
+  <title>Terminübersicht – Google Kalender Free/Busy</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       padding: 2rem;
       background: #f9f9f9;
       color: #333;
-    }
-    button {
-      background: #007acc;
-      border: none;
-      color: white;
-      padding: 0.7rem 1.5rem;
-      font-size: 1rem;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    #status {
-      margin-top: 1rem;
     }
     #busy-times {
       margin-top: 1rem;
@@ -35,104 +23,73 @@
       padding: 0.4rem 0;
     }
   </style>
-
-  <!-- Google Identity Services (neue Bibliothek) -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js"></script>
 </head>
 <body>
 
-<h1>Terminplaner: Google Kalender Free/Busy</h1>
-<button id="login-button">Anmelden mit Google</button>
-<div id="status"></div>
-<div id="busy-times" style="display:none;">
-  <h2>Blockierte Zeiten (Free/Busy)</h2>
-  <div id="slots"></div>
-</div>
+  <h1>Terminübersicht</h1>
+  <p>Hier sehen Sie, wann Termine bereits vergeben sind.</p>
 
-<script>
-  const CLIENT_ID = '813246746655-m9hh847l8tavktaqfpnr24bm0i09hhpc.apps.googleusercontent.com';
-  const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"];
-  const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
+  <div id="busy-times">
+    <h2>Belegte Zeiten (nächste 7 Tage)</h2>
+    <div id="slots">Lade Daten...</div>
+  </div>
 
-  let accessToken = null;
+  <script>
+    const calendarId = 'DEIN_KALENDER_ID@group.calendar.google.com'; // <- HIER DEINE ID EINFÜGEN
+    const API_KEY = 'AIzaSyB2oW---HIER-KANN-DEIN-API-SCHLÜSSEL-HIN---'; // ← Eigener API-Schlüssel
 
-  // Init-Kalender API
-  function initCalendarApi() {
-    gapi.load('client', () => {
+    function start() {
       gapi.client.init({
-        discoveryDocs: DISCOVERY_DOCS
-      }).then(() => {
-        gapi.client.setToken({ access_token: accessToken });
-        listBusyTimes();
-      }).catch(err => {
-        updateStatus('Fehler bei API-Initialisierung: ' + err.message);
+        apiKey: API_KEY,
+        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"]
+      }).then(listBusyTimes).catch(err => {
+        document.getElementById('slots').innerText = 'Fehler: ' + err.message;
         console.error(err);
       });
-    });
-  }
+    }
 
-  function updateStatus(message) {
-    document.getElementById('status').textContent = message;
-  }
+    function listBusyTimes() {
+      const now = new Date();
+      const timeMin = now.toISOString();
+      const timeMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  function listBusyTimes() {
-    updateStatus('Lade belegte Zeiten...');
-    const now = new Date();
-    const timeMin = now.toISOString();
-    const timeMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    gapi.client.calendar.freebusy.query({
-      resource: {
-        timeMin: timeMin,
-        timeMax: timeMax,
-        items: [{ id: 'primary' }]
-      }
-    }).then(response => {
-      const busy = response.result.calendars.primary.busy || [];
-      const slotsDiv = document.getElementById('slots');
-      slotsDiv.innerHTML = '';
-
-      if (busy.length === 0) {
-        slotsDiv.textContent = 'Keine blockierten Zeiten in den nächsten 7 Tagen.';
-      } else {
-        busy.forEach(slot => {
-          const start = new Date(slot.start);
-          const end = new Date(slot.end);
-          const div = document.createElement('div');
-          div.className = 'busy-slot';
-          div.textContent = `Von ${start.toLocaleString()} bis ${end.toLocaleString()}`;
-          slotsDiv.appendChild(div);
-        });
-      }
-
-      document.getElementById('busy-times').style.display = 'block';
-      updateStatus('');
-    }).catch(err => {
-      updateStatus('Fehler beim Laden der Termine: ' + err.message);
-      console.error(err);
-    });
-  }
-
-  // Login über Google Identity Services
-  function handleLogin() {
-    google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPES,
-      callback: (tokenResponse) => {
-        if (tokenResponse.error) {
-          updateStatus('Tokenfehler: ' + tokenResponse.error);
-          return;
+      gapi.client.calendar.freebusy.query({
+        resource: {
+          timeMin: timeMin,
+          timeMax: timeMax,
+          timeZone: 'Europe/Berlin',
+          items: [{ id: calendarId }]
         }
-        accessToken = tokenResponse.access_token;
-        updateStatus('Anmeldung erfolgreich!');
-        initCalendarApi();
-      }
-    }).requestAccessToken();
-  }
+      }).then(response => {
+        const slotsDiv = document.getElementById('slots');
+        slotsDiv.innerHTML = '';
 
-  document.getElementById('login-button').addEventListener('click', handleLogin);
-</script>
+        const busy = response.result.calendars[calendarId].busy || [];
+        if (busy.length === 0) {
+          slotsDiv.innerText = 'Der Kalender ist in den nächsten 7 Tagen frei.';
+        } else {
+          busy.forEach(slot => {
+            const start = new Date(slot.start);
+            const end = new Date(slot.end);
+            const div = document.createElement('div');
+            div.className = 'busy-slot';
+            div.textContent = `Von ${start.toLocaleString()} bis ${end.toLocaleString()}`;
+            slotsDiv.appendChild(div);
+          });
+        }
+      }).catch(err => {
+        document.getElementById('slots').innerText = 'Fehler beim Abrufen: ' + err.message;
+        console.error(err);
+      });
+    }
+
+    function loadGAPI() {
+      gapi.load('client', start);
+    }
+
+    window.onload = loadGAPI;
+  </script>
 
 </body>
 </html>
