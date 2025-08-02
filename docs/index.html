@@ -24,79 +24,41 @@
 <p>Wähle einen freien 1-Stunden-Slot für dein Gespräch:</p>
 <div id="slots">Lade freie Termine...</div>
 
-<script>    
-  const calendarId = 'pedinovl97@gmail.com'; // <- deine Kalender-ID
-  const API_KEY = 'AIzaSyA22vp3yXmWm4AS1o8sMwpLfhAn-SF8pDU'; // <- dein API Key
-  const WORKING_HOURS = { start: 8, end: 18 }; // 8–18 Uhr
+<script>
+  const CALENDAR_ID = 'primary'; // oder deine Google Calendar-ID
+  const API_KEY = 'AIzaSyA22vp3yXmWm4AS1o8sMwpLfhAn-SF8pDU';
+  const CLIENT_ID = '813246746655-m9hh847l8tavktaqfpnr24bm0i09hhpc.apps.googleusercontent.com'; // <-- dein OAuth Client ID
+  const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+  const WORKING_HOURS = { start: 8, end: 18 };
 
   function loadGAPI() {
-    gapi.load('client', () => {
-      gapi.client.init({ apiKey: API_KEY }).then(() => {
-        return gapi.client.load('calendar', 'v3');
-      }).then(() => {
-        listFreeSlots();
-      }).catch(err => {
-        document.getElementById('slots').innerText = 'Fehler beim Initialisieren: ' + err.message;
-        console.error(err);
-      });
+    gapi.load('client:auth2', async () => {
+      await gapi.client.init({ apiKey: API_KEY, clientId: CLIENT_ID, scope: SCOPES });
+      await gapi.auth2.getAuthInstance().signIn(); // Kunde muss sich einloggen
+      listFreeSlots();
     });
   }
 
   async function listFreeSlots() {
-  const now = new Date();
-  const endDate = new Date();
-  endDate.setMonth(endDate.getMonth() + 6);
+    const now = new Date();
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + 1); // 1 Monat wegen API-Limit
 
-  const intervals = getMonthlyIntervals(now, endDate);
-  const busySlots = [];
-
-  for (const interval of intervals) {
-    try {
-      const res = await gapi.client.calendar.freebusy.query({
-        resource: {
-          timeMin: interval.start.toISOString(),
-          timeMax: interval.end.toISOString(),
-          timeZone: 'Europe/Berlin',
-          items: [{ id: calendarId }]
-        }
-      });
-
-      const busy = res.result.calendars[calendarId].busy.map(b => ({
-        start: new Date(b.start),
-        end: new Date(b.end)
-      }));
-      busySlots.push(...busy);
-
-    } catch (err) {
-      document.getElementById('slots').innerText = 'Fehler beim Laden: ' + err.message;
-      console.error(err);
-      return;
-    }
-  }
-
-  const freeSlots = findFreeSlots(now, endDate, busySlots);
-  renderSlots(freeSlots);
-}
-function getMonthlyIntervals(start, end) {
-  const intervals = [];
-  let current = new Date(start);
-
-  while (current < end) {
-    const next = new Date(current);
-    next.setMonth(current.getMonth() + 1);
-
-    intervals.push({
-      start: new Date(current),
-      end: next < end ? new Date(next) : new Date(end)
+    const res = await gapi.client.calendar.freebusy.query({
+      timeMin: now.toISOString(),
+      timeMax: endDate.toISOString(),
+      timeZone: 'Europe/Berlin',
+      items: [{ id: CALENDAR_ID }]
     });
 
-    current = next;
+    const busySlots = (res.result.calendars[CALENDAR_ID].busy || []).map(b => ({
+      start: new Date(b.start),
+      end: new Date(b.end)
+    }));
+
+    const freeSlots = findFreeSlots(now, endDate, busySlots);
+    renderSlots(freeSlots);
   }
-
-  return intervals;
-}
-
-
 
   function findFreeSlots(startDate, endDate, busy) {
     const free = [];
@@ -104,17 +66,11 @@ function getMonthlyIntervals(start, end) {
 
     while (current < endDate) {
       const day = current.getDay();
-      if (day > 0 && day < 6) { // Montag bis Freitag
+      if (day > 0 && day < 6) { // Montag–Freitag
         for (let hour = WORKING_HOURS.start; hour < WORKING_HOURS.end; hour++) {
-          const slotStart = new Date(current);
-          slotStart.setHours(hour, 0, 0, 0);
-          const slotEnd = new Date(current);
-          slotEnd.setHours(hour + 1, 0, 0, 0);
-
-          const overlaps = busy.some(b =>
-            (slotStart < b.end && slotEnd > b.start)
-          );
-
+          const slotStart = new Date(current.setHours(hour, 0, 0, 0));
+          const slotEnd = new Date(current.setHours(hour + 1, 0, 0, 0));
+          const overlaps = busy.some(b => slotStart < b.end && slotEnd > b.start);
           if (!overlaps && slotStart > new Date()) {
             free.push(new Date(slotStart));
           }
@@ -123,7 +79,6 @@ function getMonthlyIntervals(start, end) {
       current.setDate(current.getDate() + 1);
       current.setHours(0, 0, 0, 0);
     }
-
     return free;
   }
 
@@ -137,12 +92,50 @@ function getMonthlyIntervals(start, end) {
     }
 
     slots.forEach(slot => {
+      const start = new Date(slot);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+
+      const dateStr = start.toLocaleDateString('de-DE');
+      const startTime = start.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      const endTime = end.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+
       const btn = document.createElement('button');
       btn.className = 'slot-button';
-      btn.innerText = slot.toLocaleString('de-DE');
-      btn.onclick = () => alert(`Du hast ${slot.toLocaleString('de-DE')} ausgewählt`);
+      btn.innerText = `${dateStr}, ${startTime} bis ${endTime} Uhr`;
+
+      btn.onclick = () => createEvent(start, end, btn);
       container.appendChild(btn);
     });
+  }
+
+  async function createEvent(start, end, button) {
+    const event = {
+      summary: 'Geplantes Gespräch',
+      description: 'Kundentermin (automatisch gebucht)',
+      start: {
+        dateTime: start.toISOString(),
+        timeZone: 'Europe/Berlin'
+      },
+      end: {
+        dateTime: end.toISOString(),
+        timeZone: 'Europe/Berlin'
+      }
+    };
+
+    try {
+      const res = await gapi.client.calendar.events.insert({
+        calendarId: CALENDAR_ID,
+        resource: event
+      });
+
+      alert('Termin gebucht für:\n' + new Date(start).toLocaleString('de-DE'));
+      button.disabled = true;
+      button.style.backgroundColor = 'gray';
+      button.innerText = 'Gebucht!';
+    } catch (err) {
+      console.error('Fehler beim Erstellen des Termins:', err);
+      alert('Termin konnte nicht gebucht werden. Bitte versuche es erneut.');
+    }
   }
 
   window.onload = loadGAPI;
