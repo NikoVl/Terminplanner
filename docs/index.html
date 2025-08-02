@@ -36,8 +36,9 @@
   </div>
 
   <script>
-    const calendarId = 'https://calendar.google.com/calendar/u/0?cid=cGVkaW5vdmw5N0BnbWFpbC5jb20'; // <- HIER DEINE ID EINFÜGEN
-    const API_KEY = 'AIzaSyA22vp3yXmWm4AS1o8sMwpLfhAn-SF8pDU'; // ← Eigener API-Schlüssel
+    // ✅ Deine Kalender-ID (nicht die URL!)
+    const calendarId = 'deinekalenderid@group.calendar.google.com'; // <- richtige ID eintragen
+    const API_KEY = 'AIzaSyA22vp3yXmWm4AS1o8sMwpLfhAn-SF8pDU'; // <- dein API Key
 
     function start() {
       gapi.client.init({
@@ -54,20 +55,25 @@
       const timeMin = now.toISOString();
       const timeMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      // gapi.client.calendar.freebusy.query({
-      //   resource: {
-      //     timeMin: timeMin,
-      //     timeMax: timeMax,
-      //     timeZone: 'Europe/Berlin',
-      //     items: [{ id: calendarId }]
-      //   }
-        gapi.client.calendar.calendarList.list()
+      gapi.client.calendar.freebusy.query({
+        resource: {
+          timeMin: timeMin,
+          timeMax: timeMax,
+          timeZone: 'Europe/Berlin',
+          items: [{ id: calendarId }]
+        }
+      }).then(response => {
+        const slotsDiv = document.getElementById('slots');
+        slotsDiv.innerHTML = '';
 
-      // }).then(response => {
-      //   const slotsDiv = document.getElementById('slots');
-      //   slotsDiv.innerHTML = '';
+        const calendar = response.result.calendars[calendarId];
+        if (!calendar || !calendar.busy) {
+          slotsDiv.innerText = 'Keine Belegungen gefunden.';
+          return;
+        }
 
-        const busy = response.result.calendars[calendarId].busy || [];
+        const busy = calendar.busy;
+
         if (busy.length === 0) {
           slotsDiv.innerText = 'Der Kalender ist in den nächsten 7 Tagen frei.';
         } else {
