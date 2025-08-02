@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Terminübersicht – Google Kalender Free/Busy</title>
+  <title>Terminübersicht – Google Kalender</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -54,16 +54,18 @@
       const timeMin = now.toISOString();
       const timeMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      gapi.client.calendar.freebusy.query({
-        resource: {
-          timeMin: timeMin,
-          timeMax: timeMax,
-          timeZone: 'Europe/Berlin',
-          items: [{ id: calendarId }]
-        }
-      }).then(response => {
-        const slotsDiv = document.getElementById('slots');
-        slotsDiv.innerHTML = '';
+      // gapi.client.calendar.freebusy.query({
+      //   resource: {
+      //     timeMin: timeMin,
+      //     timeMax: timeMax,
+      //     timeZone: 'Europe/Berlin',
+      //     items: [{ id: calendarId }]
+      //   }
+        gapi.client.calendar.calendarList.list()
+
+      // }).then(response => {
+      //   const slotsDiv = document.getElementById('slots');
+      //   slotsDiv.innerHTML = '';
 
         const busy = response.result.calendars[calendarId].busy || [];
         if (busy.length === 0) {
