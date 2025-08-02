@@ -135,7 +135,14 @@ function listBusyTimes() {
     updateStatus('Fehler beim Laden der Termine: ' + (err.result?.error?.message || err.message || err));
     console.error(err);
   });
-}
+} 
+// Startpunkt nach Laden der Google API
+  function handleClientLoad() {
+    gapi.load('client:auth2', initClient);
+  }
+
+  // Starte, wenn die Seite geladen ist
+  window.onload = handleClientLoad;
 
 </script>
 
