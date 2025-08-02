@@ -1,15 +1,116 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-  <title>Mein Terminplaner</title>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Terminplaner</title>
   <style>
-    body { font-family: sans-serif; text-align: center; margin: 2em; }
-    iframe { border: none; width: 100%; height: 600px; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      padding: 2rem;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      color: #007acc;
+    }
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    input, button {
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    #appointments {
+      margin-top: 2rem;
+      background: white;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .appointment {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 0.5rem;
+    }
+    .appointment:last-child {
+      border: none;
+    }
+    .delete-btn {
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 0.3rem 0.6rem;
+      cursor: pointer;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
-  <h1>📅 Mein Terminplaner</h1>
-  <iframe src="https://calendar.google.com/calendar/embed?src=pedinovl97@gmail.com%40group.calendar.google.com&ctz=Europe%2FBerlin" frameborder="0" scrolling="no"></iframe>
+
+  <h1>🗓️ Terminplaner</h1>
+
+  <div>
+    <div class="form-group">
+      <label for="title">Titel:</label><br>
+      <input type="text" id="title" placeholder="z. B. Arzttermin">
+    </div>
+    <div class="form-group">
+      <label for="date">Datum:</label><br>
+      <input type="date" id="date">
+    </div>
+    <button onclick="addAppointment()">➕ Termin hinzufügen</button>
+  </div>
+
+  <div id="appointments">
+    <h2>Geplante Termine</h2>
+    <div id="appointmentList"></div>
+  </div>
+
+  <script>
+    function loadAppointments() {
+      const list = document.getElementById("appointmentList");
+      list.innerHTML = "";
+      const appointments = JSON.parse(localStorage.getItem("appointments") || "[]");
+      appointments.forEach((appt, index) => {
+        const div = document.createElement("div");
+        div.className = "appointment";
+        div.innerHTML = `
+          <div><strong>${appt.title}</strong><br><small>${appt.date}</small></div>
+          <button class="delete-btn" onclick="deleteAppointment(${index})">🗑️</button>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    function addAppointment() {
+      const title = document.getElementById("title").value.trim();
+      const date = document.getElementById("date").value;
+      if (!title || !date) {
+        alert("Bitte Titel und Datum eingeben.");
+        return;
+      }
+      const appointments = JSON.parse(localStorage.getItem("appointments") || "[]");
+      appointments.push({ title, date });
+      localStorage.setItem("appointments", JSON.stringify(appointments));
+      document.getElementById("title").value = "";
+      document.getElementById("date").value = "";
+      loadAppointments();
+    }
+
+    function deleteAppointment(index) {
+      const appointments = JSON.parse(localStorage.getItem("appointments") || "[]");
+      appointments.splice(index, 1);
+      localStorage.setItem("appointments", JSON.stringify(appointments));
+      loadAppointments();
+    }
+
+    // Initiales Laden
+    loadAppointments();
+  </script>
+
 </body>
 </html>
