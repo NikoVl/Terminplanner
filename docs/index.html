@@ -13,8 +13,13 @@
   <div id="slots">Lade Termine...</div>
 
   <script>
+    // ✅ Dynamische API-URL je nach Umgebung
+    const baseUrl = location.hostname === 'localhost'
+      ? 'http://localhost:3000'
+      : 'https://terminplanner.onrender.com'; // 🔁 Hier DEIN Render-Link einsetzen!
+
     async function loadSlots() {
-      const res = await fetch('/api/slots');
+      const res = await fetch(`${baseUrl}/api/slots`);
       const data = await res.json();
 
       const busy = data.busy.map(b => ({
@@ -29,11 +34,11 @@
       const slots = [];
 
       const current = new Date(now);
-      current.setMinutes(0,0,0); // auf volle Stunde runden
+      current.setMinutes(0, 0, 0);
       while (current < end) {
         const day = current.getDay();
-        if (day > 0 && day < 6) { // Mo-Fr
-          for (let hour = 8; hour < 18; hour++) { // 8 bis 18 Uhr
+        if (day > 0 && day < 6) { // Mo–Fr
+          for (let hour = 8; hour < 18; hour++) {
             const slotStart = new Date(current);
             slotStart.setHours(hour, 0, 0, 0);
             const slotEnd = new Date(slotStart);
@@ -46,7 +51,7 @@
           }
         }
         current.setDate(current.getDate() + 1);
-        current.setHours(0,0,0,0);
+        current.setHours(0, 0, 0, 0);
       }
 
       const container = document.getElementById('slots');
@@ -67,7 +72,7 @@
             return;
           }
           try {
-            const res = await fetch('/api/book', {
+            const res = await fetch(`${baseUrl}/api/book`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -79,7 +84,7 @@
             const result = await res.json();
             if (result.success) alert('Termin erfolgreich gebucht!');
             else alert('Fehler: ' + (result.error || 'Unbekannter Fehler'));
-            loadSlots(); // Slots neu laden
+            loadSlots();
           } catch (e) {
             alert('Fehler beim Buchen: ' + e.message);
           }
