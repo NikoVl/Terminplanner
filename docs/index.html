@@ -42,31 +42,61 @@
     });
   }
 
-  function listFreeSlots() {
-    const now = new Date();
-    const endDate = new Date();
-    endDate.setMonth(endDate.getMonth());
+  async function listFreeSlots() {
+  const now = new Date();
+  const endDate = new Date();
+  endDate.setMonth(endDate.getMonth() + 6);
 
-    gapi.client.calendar.freebusy.query({
-      resource: {
-        timeMin: now.toISOString(),
-        timeMax: endDate.toISOString(),
-        timeZone: 'Europe/Berlin',
-        items: [{ id: calendarId }]
-      }
-    }).then(res => {
-      const busySlots = res.result.calendars[calendarId].busy.map(b => ({
+  const intervals = getMonthlyIntervals(now, endDate);
+  const busySlots = [];
+
+  for (const interval of intervals) {
+    try {
+      const res = await gapi.client.calendar.freebusy.query({
+        resource: {
+          timeMin: interval.start.toISOString(),
+          timeMax: interval.end.toISOString(),
+          timeZone: 'Europe/Berlin',
+          items: [{ id: calendarId }]
+        }
+      });
+
+      const busy = res.result.calendars[calendarId].busy.map(b => ({
         start: new Date(b.start),
         end: new Date(b.end)
       }));
+      busySlots.push(...busy);
 
-      const freeSlots = findFreeSlots(now, endDate, busySlots);
-      renderSlots(freeSlots);
-    }).catch(err => {
+    } catch (err) {
       document.getElementById('slots').innerText = 'Fehler beim Laden: ' + err.message;
       console.error(err);
-    });
+      return;
+    }
   }
+
+  const freeSlots = findFreeSlots(now, endDate, busySlots);
+  renderSlots(freeSlots);
+}
+function getMonthlyIntervals(start, end) {
+  const intervals = [];
+  let current = new Date(start);
+
+  while (current < end) {
+    const next = new Date(current);
+    next.setMonth(current.getMonth() + 1);
+
+    intervals.push({
+      start: new Date(current),
+      end: next < end ? new Date(next) : new Date(end)
+    });
+
+    current = next;
+  }
+
+  return intervals;
+}
+
+
 
   function findFreeSlots(startDate, endDate, busy) {
     const free = [];
