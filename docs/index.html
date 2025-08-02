@@ -60,77 +60,83 @@
   const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"];
   const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
-  function updateStatus(message) {
-    document.getElementById('status').textContent = message;
-  }
-
-  function handleClientLoad() {
-    gapi.load('client:auth2', initClient);
-  }
-
-  function initClient() {
-    gapi.client.init({
-      apiKey: API_KEY,
-      clientId: CLIENT_ID,
-      discoveryDocs: DISCOVERY_DOCS,
-      scope: SCOPES
-    }).then(() => {
-      if (gapi.auth2.getAuthInstance().isSignedIn.get()) {
-        updateStatus('Angemeldet.');
-        listBusyTimes();
-      } else {
-        updateStatus('Bitte anmelden.');
-      }
-    });
-  }
-
-  function handleAuthClick() {
-    gapi.auth2.getAuthInstance().signIn().then(() => {
-      updateStatus('Erfolgreich angemeldet!');
+ function initClient() {
+  gapi.client.init({
+    apiKey: API_KEY,
+    clientId: CLIENT_ID,
+    discoveryDocs: DISCOVERY_DOCS,
+    scope: SCOPES
+  }).then(() => {
+    const authInstance = gapi.auth2.getAuthInstance();
+    if (authInstance.isSignedIn.get()) {
+      updateStatus('Angemeldet.');
       listBusyTimes();
-    });
+    } else {
+      updateStatus('Bitte anmelden.');
+    }
+  }).catch(err => {
+    updateStatus('Fehler bei Initialisierung: ' + JSON.stringify(err));
+    console.error(err);
+  });
+}
+
+function handleAuthClick() {
+  const authInstance = gapi.auth2.getAuthInstance();
+  if (!authInstance) {
+    updateStatus('Authentifizierungs-Client noch nicht initialisiert.');
+    return;
   }
+  authInstance.signIn().then(() => {
+    updateStatus('Erfolgreich angemeldet!');
+    listBusyTimes();
+  }).catch(err => {
+    updateStatus('Anmeldung fehlgeschlagen: ' + err.error);
+    console.error(err);
+  });
+}
 
-  function listBusyTimes() {
-    updateStatus('Lade belegte Zeiten...');
-    const now = new Date();
-    const timeMin = now.toISOString();
-    const timeMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+function listBusyTimes() {
+  updateStatus('Lade belegte Zeiten...');
+  const now = new Date();
+  const timeMin = now.toISOString();
+  const timeMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    gapi.client.calendar.freebusy.query({
-      resource: {
-        timeMin: timeMin,
-        timeMax: timeMax,
-        items: [{ id: 'primary' }]
-      }
-    }).then(response => {
-      const busy = response.result.calendars.primary.busy;
-      const slotsDiv = document.getElementById('slots');
-      slotsDiv.innerHTML = '';
+  gapi.client.calendar.freebusy.query({
+    resource: {
+      timeMin: timeMin,
+      timeMax: timeMax,
+      items: [{ id: 'primary' }]
+    }
+  }).then(response => {
+    if (!response.result.calendars || !response.result.calendars.primary) {
+      updateStatus('Keine Kalenderdaten verfügbar.');
+      return;
+    }
+    const busy = response.result.calendars.primary.busy || [];
+    const slotsDiv = document.getElementById('slots');
+    slotsDiv.innerHTML = '';
 
-      if (busy.length === 0) {
-        slotsDiv.textContent = 'Keine blockierten Zeiten in den nächsten 7 Tagen.';
-      } else {
-        busy.forEach(slot => {
-          const start = new Date(slot.start);
-          const end = new Date(slot.end);
-          const div = document.createElement('div');
-          div.className = 'busy-slot';
-          div.textContent = `Von ${start.toLocaleString()} bis ${end.toLocaleString()}`;
-          slotsDiv.appendChild(div);
-        });
-      }
+    if (busy.length === 0) {
+      slotsDiv.textContent = 'Keine blockierten Zeiten in den nächsten 7 Tagen.';
+    } else {
+      busy.forEach(slot => {
+        const start = new Date(slot.start);
+        const end = new Date(slot.end);
+        const div = document.createElement('div');
+        div.className = 'busy-slot';
+        div.textContent = `Von ${start.toLocaleString()} bis ${end.toLocaleString()}`;
+        slotsDiv.appendChild(div);
+      });
+    }
 
-      document.getElementById('busy-times').style.display = 'block';
-      updateStatus('');
-    }, err => {
-      updateStatus('Fehler beim Laden der Termine: ' + err.result.error.message);
-    });
-  }
+    document.getElementById('busy-times').style.display = 'block';
+    updateStatus('');
+  }).catch(err => {
+    updateStatus('Fehler beim Laden der Termine: ' + (err.result?.error?.message || err.message || err));
+    console.error(err);
+  });
+}
 
-  window.onload = () => {
-    handleClientLoad();
-  };
 </script>
 
 </body>
