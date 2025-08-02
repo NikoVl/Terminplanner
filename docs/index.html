@@ -1,116 +1,135 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Terminplaner</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      padding: 2rem;
-      color: #333;
-    }
-    h1 {
-      text-align: center;
-      color: #007acc;
-    }
-    .form-group {
-      margin-bottom: 1rem;
-    }
-    input, button {
-      padding: 0.5rem;
-      font-size: 1rem;
-    }
-    #appointments {
-      margin-top: 2rem;
-      background: white;
-      padding: 1rem;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    .appointment {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 0.5rem;
-      border-bottom: 1px solid #ddd;
-      padding-bottom: 0.5rem;
-    }
-    .appointment:last-child {
-      border: none;
-    }
-    .delete-btn {
-      background: #e74c3c;
-      color: white;
-      border: none;
-      padding: 0.3rem 0.6rem;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Terminplaner mit Google Kalender Integration</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 2rem;
+    background: #f9f9f9;
+    color: #333;
+  }
+  button {
+    background: #007acc;
+    border: none;
+    color: white;
+    padding: 0.7rem 1.5rem;
+    font-size: 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  #status {
+    margin-top: 1rem;
+  }
+  #busy-times {
+    margin-top: 1rem;
+    background: white;
+    padding: 1rem;
+    border-radius: 6px;
+    box-shadow: 0 0 8px rgba(0,0,0,0.1);
+  }
+  .busy-slot {
+    border-bottom: 1px solid #ccc;
+    padding: 0.4rem 0;
+  }
+</style>
+<script src="https://apis.google.com/js/api.js"></script>
 </head>
 <body>
 
-  <h1>🗓️ Terminplaner</h1>
+<h1>Terminplaner: Google Kalender Free/Busy</h1>
 
-  <div>
-    <div class="form-group">
-      <label for="title">Titel:</label><br>
-      <input type="text" id="title" placeholder="z. B. Arzttermin">
-    </div>
-    <div class="form-group">
-      <label for="date">Datum:</label><br>
-      <input type="date" id="date">
-    </div>
-    <button onclick="addAppointment()">➕ Termin hinzufügen</button>
-  </div>
+<button id="login-button" onclick="handleAuthClick()">Anmelden mit Google</button>
 
-  <div id="appointments">
-    <h2>Geplante Termine</h2>
-    <div id="appointmentList"></div>
-  </div>
+<div id="status"></div>
 
-  <script>
-    function loadAppointments() {
-      const list = document.getElementById("appointmentList");
-      list.innerHTML = "";
-      const appointments = JSON.parse(localStorage.getItem("appointments") || "[]");
-      appointments.forEach((appt, index) => {
-        const div = document.createElement("div");
-        div.className = "appointment";
-        div.innerHTML = `
-          <div><strong>${appt.title}</strong><br><small>${appt.date}</small></div>
-          <button class="delete-btn" onclick="deleteAppointment(${index})">🗑️</button>
-        `;
-        list.appendChild(div);
-      });
-    }
+<div id="busy-times" style="display:none;">
+  <h2>Blockierte Zeiten (Free/Busy)</h2>
+  <div id="slots"></div>
+</div>
 
-    function addAppointment() {
-      const title = document.getElementById("title").value.trim();
-      const date = document.getElementById("date").value;
-      if (!title || !date) {
-        alert("Bitte Titel und Datum eingeben.");
-        return;
+<script>
+  const CLIENT_ID = 'YOUR_CLIENT_ID_HERE'; // <-- Hier deine Client-ID einfügen
+  const API_KEY = ''; // Für Kalender Free/Busy ist oft keine API-Key nötig, nur OAuth
+  const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"];
+  const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
+
+  function updateStatus(message) {
+    document.getElementById('status').textContent = message;
+  }
+
+  function handleClientLoad() {
+    gapi.load('client:auth2', initClient);
+  }
+
+  function initClient() {
+    gapi.client.init({
+      apiKey: API_KEY,
+      clientId: CLIENT_ID,
+      discoveryDocs: DISCOVERY_DOCS,
+      scope: SCOPES
+    }).then(() => {
+      // Prüfen ob bereits angemeldet
+      if (gapi.auth2.getAuthInstance().isSignedIn.get()) {
+        updateStatus('Angemeldet.');
+        listBusyTimes();
+      } else {
+        updateStatus('Bitte anmelden.');
       }
-      const appointments = JSON.parse(localStorage.getItem("appointments") || "[]");
-      appointments.push({ title, date });
-      localStorage.setItem("appointments", JSON.stringify(appointments));
-      document.getElementById("title").value = "";
-      document.getElementById("date").value = "";
-      loadAppointments();
-    }
+    });
+  }
 
-    function deleteAppointment(index) {
-      const appointments = JSON.parse(localStorage.getItem("appointments") || "[]");
-      appointments.splice(index, 1);
-      localStorage.setItem("appointments", JSON.stringify(appointments));
-      loadAppointments();
-    }
+  function handleAuthClick() {
+    gapi.auth2.getAuthInstance().signIn().then(() => {
+      updateStatus('Erfolgreich angemeldet!');
+      listBusyTimes();
+    });
+  }
 
-    // Initiales Laden
-    loadAppointments();
-  </script>
+  function listBusyTimes() {
+    updateStatus('Lade belegte Zeiten...');
+    const now = new Date();
+    const timeMin = now.toISOString();
+    const timeMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    gapi.client.calendar.freebusy.query({
+      resource: {
+        timeMin: timeMin,
+        timeMax: timeMax,
+        items: [{ id: 'primary' }]
+      }
+    }).then(response => {
+      const busy = response.result.calendars.primary.busy;
+      const slotsDiv = document.getElementById('slots');
+      slotsDiv.innerHTML = '';
+
+      if (busy.length === 0) {
+        slotsDiv.textContent = 'Keine blockierten Zeiten in den nächsten 7 Tagen.';
+      } else {
+        busy.forEach(slot => {
+          const start = new Date(slot.start);
+          const end = new Date(slot.end);
+          const div = document.createElement('div');
+          div.className = 'busy-slot';
+          div.textContent = 
+            `Von ${start.toLocaleString()} bis ${end.toLocaleString()}`;
+          slotsDiv.appendChild(div);
+        });
+      }
+
+      document.getElementById('busy-times').style.display = 'block';
+      updateStatus('');
+    }, err => {
+      updateStatus('Fehler beim Laden der Termine: ' + err.result.error.message);
+    });
+  }
+
+  window.onload = () => {
+    handleClientLoad();
+  };
+</script>
 
 </body>
 </html>
