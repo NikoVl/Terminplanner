@@ -25,13 +25,20 @@
 <div id="slots">Lade freie Termine...</div>
 
 <script>    
-  const calendarId = 'pedinovl97@gmail.com'; // <- richtige ID eintragen
+  const calendarId = 'pedinovl97@gmail.com'; // <- deine Kalender-ID
   const API_KEY = 'AIzaSyA22vp3yXmWm4AS1o8sMwpLfhAn-SF8pDU'; // <- dein API Key
   const WORKING_HOURS = { start: 8, end: 18 }; // 8–18 Uhr
 
   function loadGAPI() {
     gapi.load('client', () => {
-      gapi.client.init({ apiKey: API_KEY }).then(listFreeSlots);
+      gapi.client.init({ apiKey: API_KEY }).then(() => {
+        return gapi.client.load('calendar', 'v3');
+      }).then(() => {
+        listFreeSlots();
+      }).catch(err => {
+        document.getElementById('slots').innerText = 'Fehler beim Initialisieren: ' + err.message;
+        console.error(err);
+      });
     });
   }
 
@@ -45,10 +52,10 @@
         timeMin: now.toISOString(),
         timeMax: endDate.toISOString(),
         timeZone: 'Europe/Berlin',
-        items: [{ id: CALENDAR_ID }]
+        items: [{ id: calendarId }]
       }
     }).then(res => {
-      const busySlots = res.result.calendars[CALENDAR_ID].busy.map(b => ({
+      const busySlots = res.result.calendars[calendarId].busy.map(b => ({
         start: new Date(b.start),
         end: new Date(b.end)
       }));
@@ -69,8 +76,10 @@
       const day = current.getDay();
       if (day > 0 && day < 6) { // Montag bis Freitag
         for (let hour = WORKING_HOURS.start; hour < WORKING_HOURS.end; hour++) {
-          const slotStart = new Date(current.setHours(hour, 0, 0, 0));
-          const slotEnd = new Date(current.setHours(hour + 1, 0, 0, 0));
+          const slotStart = new Date(current);
+          slotStart.setHours(hour, 0, 0, 0);
+          const slotEnd = new Date(current);
+          slotEnd.setHours(hour + 1, 0, 0, 0);
 
           const overlaps = busy.some(b =>
             (slotStart < b.end && slotEnd > b.start)
