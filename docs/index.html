@@ -45,7 +45,7 @@
   function listFreeSlots() {
     const now = new Date();
     const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + 6);
+    endDate.setMonth(endDate.getMonth());
 
     gapi.client.calendar.freebusy.query({
       resource: {
