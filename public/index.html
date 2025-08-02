@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Termin buchen</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2rem; }
+    button { padding: 10px; margin: 5px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Terminbuchung</h1>
+  <div id="slots">Lade Termine...</div>
+
+  <script>
+    async function loadSlots() {
+      const res = await fetch('/api/slots');
+      const data = await res.json();
+
+      const busy = data.busy.map(b => ({
+        start: new Date(b.start),
+        end: new Date(b.end)
+      }));
+
+      const now = new Date();
+      const end = new Date();
+      end.setMonth(end.getMonth() + 1);
+
+      const slots = [];
+
+      const current = new Date(now);
+      current.setMinutes(0,0,0); // auf volle Stunde runden
+      while (current < end) {
+        const day = current.getDay();
+        if (day > 0 && day < 6) { // Mo-Fr
+          for (let hour = 8; hour < 18; hour++) { // 8 bis 18 Uhr
+            const slotStart = new Date(current);
+            slotStart.setHours(hour, 0, 0, 0);
+            const slotEnd = new Date(slotStart);
+            slotEnd.setHours(hour + 1);
+
+            const isBusy = busy.some(b => slotStart < b.end && slotEnd > b.start);
+            if (!isBusy && slotStart > now) {
+              slots.push({ start: slotStart, end: slotEnd });
+            }
+          }
+        }
+        current.setDate(current.getDate() + 1);
+        current.setHours(0,0,0,0);
+      }
+
+      const container = document.getElementById('slots');
+      container.innerHTML = '';
+      if (slots.length === 0) {
+        container.textContent = 'Keine freien Termine verfügbar.';
+        return;
+      }
+
+      slots.forEach(slot => {
+        const btn = document.createElement('button');
+        btn.textContent = `${slot.start.toLocaleDateString('de-DE')}, ${slot.start.getHours()}:00 bis ${slot.end.getHours()}:00 Uhr`;
+        btn.onclick = async () => {
+          const name = prompt('Dein Name:');
+          const email = prompt('Deine E-Mail:');
+          if (!name || !email) {
+            alert('Name und E-Mail sind erforderlich!');
+            return;
+          }
+          try {
+            const res = await fetch('/api/book', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name, email,
+                start: slot.start.toISOString(),
+                end: slot.end.toISOString()
+              })
+            });
+            const result = await res.json();
+            if (result.success) alert('Termin erfolgreich gebucht!');
+            else alert('Fehler: ' + (result.error || 'Unbekannter Fehler'));
+            loadSlots(); // Slots neu laden
+          } catch (e) {
+            alert('Fehler beim Buchen: ' + e.message);
+          }
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    loadSlots();
+  </script>
+</body>
+</html>
