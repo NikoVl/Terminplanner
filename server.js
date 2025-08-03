@@ -3,6 +3,7 @@ import cors from 'cors';
 import { google } from 'googleapis';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
 // Pfad-Helfer für ES Modules
 const __filename = fileURLToPath(import.meta.url);
@@ -15,19 +16,28 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Service Account Credentials (lade lokal, nicht in Git pushen!)
-import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-console.log('GOOGLE_CREDENTIALS:', process.env.GOOGLE_CREDENTIALS);
+// 🔐 Credentials prüfen
 if (!process.env.GOOGLE_CREDENTIALS) {
-  throw new Error('GOOGLE_CREDENTIALS nicht gesetzt!');
+  throw new Error('❌ GOOGLE_CREDENTIALS Umgebungsvariable nicht gesetzt!');
 }
-const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 
+  if (!serviceAccount.client_email || !serviceAccount.private_key) {
+    throw new Error('❌ GOOGLE_CREDENTIALS fehlt client_email oder private_key');
+  }
+} catch (err) {
+  console.error('❌ Fehler beim Parsen von GOOGLE_CREDENTIALS:', err.message);
+  process.exit(1);
+}
+
+// 🔑 Google Auth
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
-const calendarId = 'primary'; // Oder deine Kalender-ID hier
+const calendarId = 'primary'; // oder deine Kalender-ID
 
 const auth = new google.auth.GoogleAuth({
   credentials: serviceAccount,
@@ -36,11 +46,12 @@ const auth = new google.auth.GoogleAuth({
 
 const calendar = google.calendar({ version: 'v3', auth });
 
+// 📅 Verfügbare Slots abrufen
 app.get('/api/slots', async (req, res) => {
   try {
     const now = new Date();
     const end = new Date();
-    end.setMonth(end.getMonth() + 1); // 1 Monat in die Zukunft
+    end.setMonth(end.getMonth() + 1);
 
     const response = await calendar.freebusy.query({
       requestBody: {
@@ -53,18 +64,18 @@ app.get('/api/slots', async (req, res) => {
     const busy = response.data.calendars[calendarId]?.busy || [];
     res.json({ busy });
   } catch (error) {
-    console.error('Fehler bei freebusy:', error);
+    console.error('❌ Fehler bei freebusy:', error.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
+// 📆 Terminbuchung
 app.post('/api/book', async (req, res) => {
   const { name, email, start, end } = req.body;
   if (!name || !email || !start || !end) {
     return res.status(400).json({ error: 'Fehlende Parameter' });
   }
   try {
-    // Termin erstellen
     await calendar.events.insert({
       calendarId,
       requestBody: {
@@ -76,11 +87,11 @@ app.post('/api/book', async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error('Fehler bei Terminbuchung:', error);
+    console.error('❌ Fehler bei Terminbuchung:', error.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server läuft auf http://localhost:${PORT}`);
+  console.log(`✅ Server läuft auf http://localhost:${PORT}`);
 });
