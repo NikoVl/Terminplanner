@@ -37,7 +37,7 @@ try {
 
 // 🔑 Google Auth
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
-const calendarId = 'primary'; // oder deine Kalender-ID
+const calendarId = 'pedinovl97@gmail.com'; // oder deine Kalender-ID
 
 const auth = new google.auth.GoogleAuth({
   credentials: serviceAccount,
